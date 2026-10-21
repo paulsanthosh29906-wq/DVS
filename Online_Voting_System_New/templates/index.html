@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Digital Voting System for College Students</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<header class="navbar">
+    <div class="logo">🗳️ Digital Voting System for College Students </div>
+    <nav>
+        <a href="#home">Home</a>
+        <a href="#auth">Login / Sign Up</a>
+        {% if session.get('user_id') and session.get('role') == 'voter' %}
+            <a href="#vote">Vote</a>
+            <span class="welcome">Hi, {{ session.get('name') }}</span>
+            <a href="{{ url_for('logout') }}">Logout</a>
+        {% else %}
+            <a href="#about">About</a>
+        {% endif %}
+    </nav>
+</header>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+        <div class="flash-container">
+        {% for category, message in messages %}
+            {% if category == 'voter_id' %}
+            <div class="flash voter-id-notification">
+                <div><strong>Your Voter ID</strong><br><span class="voter-id-value">{{ message }}</span></div>
+                <button class="copy-voter-id" type="button" onclick="copyVoterId('{{ message }}')">Copy ID</button>
+            </div>
+            {% else %}
+            <div class="flash {{ category }}">{{ message }}</div>
+            {% endif %}
+        {% endfor %}
+        </div>
+    {% endif %}
+{% endwith %}
+
+<section id="home" class="hero">
+    <div>
+        <h1>Secure & Students Online Voting</h1>
+        <p>Vote online using your unique Voter ID. Results are visible only inside the Admin Dashboard.</p>
+        <a class="btn" href="#auth">Login / Sign Up</a>
+    </div>
+</section>
+
+<section class="status-section">
+    <h2>Voting Status</h2>
+    {% if status == "open" %}
+        <div class="status open">🟢 Voting is OPEN</div>
+    {% elif status == "upcoming" %}
+        <div class="status upcoming">🟡 Voting has not started yet</div>
+    {% elif status == "closed" %}
+        <div class="status closed">🔴 Voting is CLOSED</div>
+    {% else %}
+        <div class="status closed">⚪ Voting time is not set</div>
+    {% endif %}
+    {% if setting %}
+        <p><strong>Start:</strong> {{ setting.start_at }} &nbsp; | &nbsp; <strong>End:</strong> {{ setting.end_at }}</p>
+    {% endif %}
+</section>
+
+<section id="auth" class="auth-page">
+    <div class="auth-card">
+        <div class="auth-tabs">
+            <button class="tab-btn active" onclick="showAuth('voter-login', this)">Voter Login</button>
+            <button class="tab-btn" onclick="showAuth('signup', this)">Sign Up</button>
+            <button class="tab-btn" onclick="showAuth('admin-login', this)">Admin Login</button>
+        </div>
+
+        <div id="voter-login" class="auth-panel active-panel">
+            <h2>Voter Login</h2>
+            <p class="hint">Use the unique Voter ID you received after signup.</p>
+            <form method="POST" action="{{ url_for('login') }}">
+                <label>Voter ID</label>
+                <input type="text" name="voter_id" placeholder="Example: VT482913" pattern="[A-Za-z0-9]+" required>
+                <label>Password</label>
+                <input type="password" name="password" placeholder="Enter password" required>
+                <button class="btn full" type="submit">Login</button>
+            </form>
+            <p class="forgot-link"><a href="{{ url_for('forgot_password') }}">Forgot Password?</a></p>
+        </div>
+
+        <div id="signup" class="auth-panel">
+            <h2>Create Voter Account</h2>
+            <p class="hint">Your Voter ID will be generated automatically and will contain letters + numbers only.</p>
+            <form method="POST" action="{{ url_for('signup') }}" onsubmit="return validateSignup()">
+                <label>Full Name</label>
+                <input type="text" name="name" placeholder="Your full name" required>
+                <label>Email</label>
+                <input type="email" name="email" placeholder="you@example.com" required>
+                <label>Mobile Number</label>
+                <input type="tel" name="phone" placeholder="10-digit mobile number" pattern="[6-9][0-9]{9}" maxlength="10" required>
+                <small class="field-note">Your Voter ID will be sent to this mobile number by SMS when SMS service is configured.</small>
+                <label>Password</label>
+                <input id="signup-password" type="password" name="password" placeholder="Minimum 6 characters" required>
+                <label>Confirm Password</label>
+                <input id="confirm-password" type="password" name="confirm_password" placeholder="Re-enter password" required>
+                <button class="btn full" type="submit">Create Account</button>
+            </form>
+        </div>
+
+        <div id="admin-login" class="auth-panel">
+            <h2>Admin Login</h2>
+            <p class="hint">Admin login opens the protected dashboard. Election results are shown only there.</p>
+            <form method="POST" action="{{ url_for('admin_login') }}">
+                <label>Admin ID</label>
+                <input type="text" name="admin_id" placeholder="Example: ADMIN001" pattern="[A-Za-z0-9]+" required>
+                <label>Admin Password</label>
+                <input type="password" name="password" placeholder="Enter admin password" required>
+                <button class="btn full" type="submit">Open Admin Dashboard</button>
+            </form>
+            <div class="demo-box">
+                <strong>Demo admin</strong><br>
+                ID: ADMIN<br>
+                Password: admin
+            </div>
+        </div>
+    </div>
+</section>
+
+{% if session.get('role') == 'voter' %}
+<section id="vote" class="section">
+    <div class="section-heading">
+        <h2>Cast Your Vote</h2>
+        <span class="logged-voter">Voter ID: {{ session.get('voter_id') }}</span>
+    </div>
+
+    {% if already_voted %}
+        <p class="notice success-text">You have already voted. Thank you!</p>
+    {% elif status != "open" %}
+        <p class="notice">Voting is currently not open.</p>
+    {% else %}
+        <div class="candidate-grid">
+        {% for candidate in candidates %}
+            <div class="candidate-card">
+                <div class="candidate-icon">👤</div>
+                <h3>{{ candidate.name }}</h3>
+                <p>{{ candidate.party }}</p>
+                <form method="POST" action="{{ url_for('vote', candidate_id=candidate.id) }}" onsubmit="return confirmVote('{{ candidate.name|e }}')">
+                    <button class="vote-btn" type="submit">Vote</button>
+                </form>
+            </div>
+        {% else %}
+            <p>No candidates available.</p>
+        {% endfor %}
+        </div>
+    {% endif %}
+</section>
+{% endif %}
+
+<section id="about" class="section about">
+    <h2>About</h2>
+    <p>This academic Online Voting System uses HTML, CSS, JavaScript, Python Flask and MySQL. Voter IDs are generated as unique alphanumeric values, each voter can vote once per election round, voting time is controlled by the administrator, and election results are restricted to the Admin Dashboard.</p>
+</section>
+
+<footer>
+    <p>© Students Online Voting System | Academic Project</p>
+</footer>
+
+<script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>

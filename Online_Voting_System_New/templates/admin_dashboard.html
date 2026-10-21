@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard - Online Voting System</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<header class="navbar">
+    <div class="logo">🛠️ Admin Dashboard</div>
+    <nav>
+        <span class="welcome">{{ session.get('name') }} ({{ session.get('voter_id') }})</span>
+        <a href="{{ url_for('logout') }}">Logout</a>
+    </nav>
+</header>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+        <div class="flash-container">
+        {% for category, message in messages %}
+            <div class="flash {{ category }}">{{ message }}</div>
+        {% endfor %}
+        </div>
+    {% endif %}
+{% endwith %}
+
+<main class="dashboard section">
+    <div class="dashboard-title">
+        <div>
+            <h1>Admin Dashboard</h1>
+            <p>Only an authenticated administrator can see election results and controls.</p>
+        </div>
+        <div class="status-pill">
+            {% if status == 'open' %}🟢 OPEN{% elif status == 'upcoming' %}🟡 UPCOMING{% elif status == 'closed' %}🔴 CLOSED{% else %}⚪ NOT SET{% endif %}
+        </div>
+    </div>
+
+    <div class="stats">
+        <div class="stat-card"><span>{{ voter_count }}</span><small>Registered Voters</small></div>
+        <div class="stat-card"><span>{{ vote_count }}</span><small>Total Votes</small></div>
+        <div class="stat-card"><span>{{ candidates|length }}</span><small>Candidates</small></div>
+    </div>
+
+    <div class="admin-grid">
+        <div class="card">
+            <h2>Voting Time</h2>
+            <form method="POST" action="{{ url_for('admin_settings') }}">
+                <label>Start Time</label>
+                <input type="datetime-local" name="start_at" value="{{ setting.start_at.strftime('%Y-%m-%dT%H:%M') if setting else '' }}" required>
+                <label>End Time</label>
+                <input type="datetime-local" name="end_at" value="{{ setting.end_at.strftime('%Y-%m-%dT%H:%M') if setting else '' }}" required>
+                <button class="btn" type="submit">Save Voting Time</button>
+            </form>
+        </div>
+
+        <div class="card">
+            <h2>Add Candidate</h2>
+            <form method="POST" action="{{ url_for('add_candidate') }}">
+                <label>Candidate Name</label>
+                <input type="text" name="name" placeholder="Candidate name" required>
+                <label>Party Name</label>
+                <input type="text" name="party" placeholder="Party name" required>
+                <button class="btn" type="submit">Add Candidate</button>
+            </form>
+        </div>
+    </div>
+
+
+    <div class="card dashboard-card">
+        <h2>Registered Voters</h2>
+        <p class="hint">Voter accounts are kept for future election rounds. A voter can vote once in each election. Voters who have not voted in the current election can be removed; voters who already voted are kept so their vote record is preserved.</p>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr><th>Name</th><th>Voter ID</th><th>Email</th><th>Mobile</th><th>Status</th><th>Action</th></tr>
+                </thead>
+                <tbody>
+                {% for voter in voters %}
+                    <tr>
+                        <td>{{ voter.name }}</td>
+                        <td><strong>{{ voter.voter_id }}</strong></td>
+                        <td>{{ voter.email }}</td>
+                        <td>{{ voter.phone }}</td>
+                        <td>
+                            {% if voter.has_voted %}
+                                <span class="badge voted">Voted</span>
+                            {% else %}
+                                <span class="badge not-voted">Not Voted</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if voter.has_voted %}
+                                <button class="delete-btn disabled-btn" type="button" disabled title="Voted voters cannot be removed">Remove</button>
+                            {% else %}
+                                <form method="POST" action="{{ url_for('delete_voter', voter_id=voter.id) }}" onsubmit="return confirmDeleteVoter('{{ voter.name|e }}')">
+                                    <button class="delete-btn" type="submit">Remove</button>
+                                </form>
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% else %}
+                    <tr><td colspan="6">No voters have signed up yet.</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="card dashboard-card">
+        <h2>Election Results</h2>
+        <p class="hint">Results shown here are for the current election round only. When a new election round starts, the same registered voters can vote again.</p>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr><th>Candidate</th><th>Party</th><th>Votes</th></tr>
+                </thead>
+                <tbody>
+                {% for row in results %}
+                    <tr>
+                        <td>{{ row.name }}</td>
+                        <td>{{ row.party }}</td>
+                        <td><strong>{{ row.vote_count }}</strong></td>
+                    </tr>
+                {% else %}
+                    <tr><td colspan="3">No results yet.</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="card dashboard-card">
+        <h2>Manage Candidates</h2>
+        {% for candidate in candidates %}
+        <div class="candidate-row">
+            <span><strong>{{ candidate.name }}</strong> — {{ candidate.party }}</span>
+            <form method="POST" action="{{ url_for('delete_candidate', candidate_id=candidate.id) }}" data-candidate-name="{{ candidate.name }}" onsubmit="return confirmDeleteCandidate(this.dataset.candidateName)">
+                <button class="delete-btn" type="submit">Delete</button>
+            </form>
+        </div>
+        {% else %}
+            <p>No candidates.</p>
+        {% endfor %}
+    </div>
+</main>
+
+<script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
